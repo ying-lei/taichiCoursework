@@ -6,11 +6,21 @@ ti.init(ti.gpu)
 canvasSize = 512
 
 # startup default param
-searchRange = 9
-threshold = 7
-state = 30
 
-#pixels = ti.Vector.field(3, ti.f32, shape=(canvasSize, canvasSize))
+searchRange = ti.field(ti.i32, shape=())
+threshold = ti.field(ti.i32, shape=())
+state = ti.field(ti.i32, shape=())
+
+# range param
+randRangeMin = 1
+maxRange = 10
+maxThreadhold = 25
+maxState = 20
+
+# startup value
+searchRange[None] = 9
+threshold[None] = 7
+state[None] = 30
 
 # color data storing image
 pixels = ti.Vector.field(3, ti.f32, shape=(canvasSize, canvasSize))
@@ -23,8 +33,16 @@ raw = ti.field(dtype=int, shape=(canvasSize, canvasSize))
 def initialize():
 
     for i, j in pixels:
-        v = ti.random() * state
+        v = ti.random() * state[None]
         raw[i, j] = v
+
+@ti.kernel
+def randomParam():
+    searchRange[None] = ti.random(ti.f32) * maxRange + randRangeMin
+    threshold[None] = ti.random(ti.f32) * maxThreadhold + randRangeMin
+    state[None] = ti.random(ti.f32) * maxState + randRangeMin
+
+
 
 @ti.kernel
 def update(searchRange:int, threshold:int, state:int):
@@ -55,24 +73,27 @@ def update(searchRange:int, threshold:int, state:int):
 def draw():
     # color remap code here
     for i, j in pixels:
-        remap = raw[i, j] / state
+        remap = raw[i, j] / state[None]
         pixels[i, j] = (remap, remap, remap)
 
 
 
 gui = ti.GUI('CCA2D', (canvasSize, canvasSize))
 
-guiSearchRange = gui.slider('searchRange', 1, 50, step=1)
-guiSearchRange.value = searchRange
-
-guiThreshold = gui.slider('threshold', 1, 50, step=1)
-guiThreshold.value = threshold
-
-guiState = gui.slider('state', 1, 50, step=1)
-guiState.value = state
+guiSearchRange = gui.slider('searchRange', randRangeMin, maxRange, step=1.0)
+guiThreshold = gui.slider('threshold', randRangeMin, maxThreadhold, step=1.0)
+guiState = gui.slider('state', randRangeMin, maxState, step=1.0)
 
 redraw = gui.button('redraw')
+randomize = gui.button('randomize')
 
+def updateGUI():
+    guiSearchRange.value = searchRange[None]
+    guiThreshold.value = threshold[None]
+    guiState.value = state[None]
+
+
+updateGUI()
 initialize()
 
 while gui.running:
@@ -80,6 +101,12 @@ while gui.running:
     for e in gui.get_events(gui.PRESS):
         if e.key == redraw:
             initialize()
+
+        if e.key == randomize:
+            randomParam()
+            updateGUI()
+            initialize()
+
 
     gui.clear(000000)
     update(int(guiSearchRange.value), int(guiThreshold.value), int(guiState.value))
